@@ -9,6 +9,13 @@ on:
 permissions:
   id-token: write
   contents: read
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: djangoecs
+  ECS_TASK_DEFINITION: ./task-definition.json
+  CONTAINER_NAME: djangoecs
+  ECS_SERVICE: djangoecs
+  ECS_CLUSTER: djangoecscluster
 
 
 jobs:
@@ -49,3 +56,20 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/djangoecs:$IMAGE_TAG .
           docker push $ECR_REGISTRY/djangoecs:$IMAGE_TAG
+          echo "image= $ECR_REGISTRY/djangoecs:$IMAGE_TAG >> $GITHUB_OUTPUT"
+      #푸시된 이미지를 가지고 ECS 서비스 재시작
+      - name: Fill in the new Image in the ECS task Definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@c804dfbdd57f713b6c079302a4c01db7017a36fc
+        with:
+          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy ECS task definigion
+        uses: aws-actions/amazon-ecs-deploy-task-definition@df9643053eda01f169e64a0e60233aacca83799a
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
